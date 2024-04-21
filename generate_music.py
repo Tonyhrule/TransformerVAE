@@ -1,16 +1,31 @@
+import torch
+from model import TransformerVAE
+from torch import nn
 import numpy as np
-import tensorflow as tf
-from tensorflow.keras.models import load_model
 
-def generate_music_from_file(encoder, file_path):
-    input_data = np.load(file_path)
-    input_data = input_data / 128.0  # Normalize if needed
-    input_data = np.expand_dims(input_data, axis=0)  # Model expects batch dimension
-    latent_representation = encoder.predict(input_data)
-    return latent_representation
+def generate(model_path='./model_transformer_vae.pth', latent_dim=256, sequence_length=100, temperature=1.0):
+    # Load the model
+    model = TransformerVAE()
+    model.load_state_dict(torch.load(model_path))
+    model.eval()
+
+    # Generate a random latent vector
+    z = torch.randn(1, latent_dim) * temperature
+
+    # Prepare the latent vector for the decoder
+    z = z.repeat(sequence_length, 1, 1)
+
+    # Generate piano roll
+    with torch.no_grad():
+        generated_sequence, _, _ = model.decoder(z, z)  # Decoding from z to reconstruct the sequence
+
+    # Convert the logits to binary values and transpose to match (num_pitches, time_steps)
+    piano_roll = torch.sigmoid(generated_sequence).squeeze().t().numpy()
+    piano_roll = np.where(piano_roll >= 0.5, 1, 0)
+
+    return piano_roll
 
 if __name__ == "__main__":
-    # Load the encoder model
-    encoder = load_model('vae_encoder.h5')
-    generated_data = generate_music_from_file(encoder, 'output/example_piano_roll.npy')
-    print("Generated latent representation:", generated_data)
+    piano_roll = generate()
+    print("Generated Piano Roll Shape:", piano_roll.shape)
+    # Optionally, save or visualize the piano roll here
