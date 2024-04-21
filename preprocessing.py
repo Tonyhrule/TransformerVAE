@@ -3,17 +3,13 @@ import numpy as np
 import os
 import functools
 
-
 def concatNotes(a, b):
-    return a + b.notes
-
+    return a + (b.notes if hasattr(b, 'notes') else [])
 
 def processMidi(midi_file):
     """
     Convert MIDI file to a Piano Roll array.
     :param midi_file: Path to the MIDI file.
-    :param fs: Sampling frequency of the columns, example is like => each column is 1/fs seconds.
-    :param pitch_range: Tuple (min_pitch, max_pitch) representing the range of pitches to include.
     :return: Piano roll of shape (num_pitches, time_steps).
     """
     midi_data = pretty_midi.PrettyMIDI(midi_file)
@@ -40,22 +36,26 @@ def processMidi(midi_file):
         )
     )
 
+    if not allNotes:
+        return np.array([])  # Handle empty notes list
+
+    final_note = np.array(
+        [
+            (
+                0,
+                midi_data.time_to_tick(allNotes[-1][1] + allNotes[-1][2]),
+                0,
+            )
+        ]
+    )
+
     return np.concatenate(
         (
             np.array(allNotes),
-            np.array(
-                [
-                    (
-                        0,
-                        midi_data.time_to_tick(allNotes[-1][1] + allNotes[-1][2]),
-                        0,
-                    )
-                ]
-            ),
+            final_note
         ),
         axis=0,
     )
-
 
 midi_directory = "./midis"
 fileList = []
@@ -70,11 +70,13 @@ if not os.path.exists("output"):
 for file in fileList:
     try:
         notes = processMidi(file)
-        np.save(
-            "output/"
-            + file.replace("./midis/", "").replace("/", "-").replace(".mid", "")
-            + ".npy",
-            notes,
-        )
-    except:
-        print("Error with" + file)
+        if notes.size == 0:
+            print("No notes found in", file)
+            continue
+        # Normalize the file path for cross-platform compatibility
+        normalized_file_path = os.path.normpath(file)
+        output_filename = os.path.join("output", normalized_file_path.replace(midi_directory + os.sep, "").replace(os.sep, "-").replace(".mid", "") + ".npy")
+        np.save(output_filename, notes)
+        print("Processed", file)
+    except Exception as e:
+        print("Error with", file, ":", str(e))
