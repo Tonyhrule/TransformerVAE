@@ -51,8 +51,12 @@ def train_model(data_directory, seq_length, num_pitches, latent_dim):
     train_data = data[:int(len(data)*0.8)]
     val_data = data[int(len(data)*0.8):]
 
-    vae, _ = build_transformer_vae(seq_length, num_pitches, latent_dim)
+    vae, encoder = build_transformer_vae(seq_length, num_pitches, latent_dim)
     vae.fit(train_data, train_data, epochs=50, batch_size=32, validation_data=(val_data, val_data))
+    
+    # Save the entire VAE and the encoder model
+    vae.save('vae_model.h5')
+    encoder.save('vae_encoder.h5')
 
 if __name__ == "__main__":
     train_model('output', 100, 128, 64)  # Example settings
