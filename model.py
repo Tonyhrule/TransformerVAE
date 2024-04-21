@@ -4,7 +4,6 @@ from torch import nn
 class TransformerVAE(nn.Module):
     def __init__(self, feature_size=128, latent_dim=256, num_heads=8, num_layers=4, dropout=0.1):
         super().__init__()
-        self.latent_dim = latent_dim
         self.encoder = nn.TransformerEncoder(
             nn.TransformerEncoderLayer(d_model=feature_size, nhead=num_heads, dropout=dropout),
             num_layers=num_layers
