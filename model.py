@@ -8,12 +8,22 @@ class TransformerVAE(nn.Module):
             nn.TransformerEncoderLayer(d_model=feature_size, nhead=num_heads, dropout=dropout, batch_first=True),
             num_layers=num_layers
         )
-        self.to_latent = nn.Linear(feature_size, latent_dim * 2)
+        self.to_latent = nn.Linear(feature_size, latent_dim * 2)  # Outputs mu and logvar
         self.decoder = nn.TransformerDecoder(
             nn.TransformerDecoderLayer(d_model=feature_size, nhead=num_heads, dropout=dropout, batch_first=True),
             num_layers=num_layers
         )
-        self.to_output = nn.Linear(feature_size, feature_size)
+        self.to_output = nn.Linear(latent_dim, feature_size)  # Adjusted to ensure dimensions align
+
+        # Initialize weights for better model performance
+        self._init_weights()
+
+    def _init_weights(self):
+        for module in self.modules():
+            if isinstance(module, nn.Linear):
+                nn.init.xavier_uniform_(module.weight)
+                if module.bias is not None:
+                    nn.init.constant_(module.bias, 0)
 
     def reparameterize(self, mu, logvar):
         std = torch.exp(0.5 * logvar)
@@ -21,11 +31,21 @@ class TransformerVAE(nn.Module):
         return mu + eps * std
 
     def forward(self, src):
+        # Encoding
         encoded = self.encoder(src)
         latent_params = self.to_latent(encoded.mean(dim=1))
         mu, logvar = latent_params.chunk(2, dim=-1)
         z = self.reparameterize(mu, logvar)
-        z = z.unsqueeze(1).expand(-1, src.size(1), -1)
-        decoded = self.decoder(z, src)
+
+        # Decoding
+        z = z.unsqueeze(1).repeat(1, src.size(1), 1)  # Repeat latent vector for each time step
+        decoded = self.decoder(z, encoded)  # Use encoded as the memory state
         output = torch.sigmoid(self.to_output(decoded))  # Apply sigmoid to ensure output is between 0 and 1
+
         return output, mu, logvar
+    
+    def loss_function(self, recon_x, x, mu, logvar):
+        BCE = torch.nn.functional.binary_cross_entropy(recon_x, x, reduction='sum')
+        KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+        return BCE + KLD
+    

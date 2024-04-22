@@ -16,12 +16,11 @@ class PianoRollDataset(Dataset):
         data = np.load(self.file_paths[idx])
         if data.shape[1] != self.feature_size:
             data = np.pad(data, ((0, 0), (0, self.feature_size - data.shape[1])), mode='constant', constant_values=0)
-        # Normalize data to be between 0 and 1, and ensure there is no division by zero
-        data_max = np.max(data)
-        if data_max > 0:  # Prevent division by zero
-            data = data.astype(np.float32) / data_max
-        else:
-            data = data.astype(np.float32)
+        # Diagnostics for data normalization
+        max_val = np.max(data)
+        min_val = np.min(data)
+        data = data / max_val if max_val > 0 else data
+        print(f"Data stats - Max: {max_val}, Min: {min_val}, Shape: {data.shape}")
         return torch.tensor(data, dtype=torch.float32)
 
     @staticmethod
