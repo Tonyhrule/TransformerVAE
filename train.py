@@ -8,7 +8,7 @@ from utils import PianoRollDataset
 
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def train(model, data_loader, optimizer, epochs=10, device=torch.device('cpu'), save_path='', validate=False):
+def train(model, data_loader, optimizer, epochs=10, device=torch.device('cpu'), save_path='', validate=False, log_interval=100):
     """
     Train the TransformerVAE model with the given data.
     Optionally perform validation if validate set to True.
@@ -36,9 +36,10 @@ def train(model, data_loader, optimizer, epochs=10, device=torch.device('cpu'), 
             optimizer.step()
             total_loss += loss.item()
 
-            if batch_idx % 10 == 0:
+            if batch_idx % log_interval == 0:
                 logging.info(f'Epoch {epoch + 1}, Batch {batch_idx}: Loss = {loss.item()}')
-                save_model(model, save_path, batch_idx)
+                if batch_idx % (10 * log_interval) == 0:
+                    save_model(model, save_path, batch_idx)
 
         average_loss = total_loss / len(data_loader)
         logging.info(f'Epoch {epoch + 1}: Average Loss = {average_loss}')

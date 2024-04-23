@@ -19,17 +19,21 @@ class TransformerVAE(nn.Module):
 
     def __init__(self, feature_size=128, latent_dim=128, num_heads=8, num_layers=4, dropout=0.1):
         super(TransformerVAE, self).__init__()
-        self.encoder = nn.TransformerEncoder(
-            nn.TransformerEncoderLayer(d_model=feature_size, nhead=num_heads, dropout=dropout, batch_first=True),
-            num_layers=num_layers
-        )
+        # Define reusable Transformer layers
+        encoder_layer = nn.TransformerEncoderLayer(
+            d_model=feature_size, nhead=num_heads, dropout=dropout, batch_first=True)
+        decoder_layer = nn.TransformerDecoderLayer(
+            d_model=feature_size, nhead=num_heads, dropout=dropout, batch_first=True)
+
+        # Create encoder and decoder using the defined layers
+        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+        self.decoder = nn.TransformerDecoder(decoder_layer, num_layers=num_layers)
+
+        # Linear transformations for the latent space
         self.to_latent = nn.Linear(feature_size, latent_dim * 2)  # Outputs mu and log variance
-        self.decoder = nn.TransformerDecoder(
-            nn.TransformerDecoderLayer(d_model=feature_size, nhead=num_heads, dropout=dropout, batch_first=True),
-            num_layers=num_layers
-        )
         self.to_output = nn.Linear(latent_dim, feature_size)
 
+        # Initialize model weights
         self.initialize_weights()
 
     def initialize_weights(self):

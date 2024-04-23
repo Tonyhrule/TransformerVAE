@@ -23,11 +23,10 @@ class PianoRollDataset(Dataset):
 
     def load_file_paths(self):
         """Loads up to max_files NPY file paths from the directory."""
-        try:
-            files = [os.path.join(self.directory, f) for f in os.listdir(self.directory) if f.endswith('.npy')]
-            return files[:self.max_files]
-        except Exception as e:
-            raise RuntimeError(f"Unable to access {self.directory}: {e}")
+        files = [os.path.join(self.directory, f) for f in os.listdir(self.directory) if f.endswith('.npy')]
+        if len(files) > self.max_files:
+            files = files[:self.max_files]
+        return files
 
     def __len__(self):
         """Returns the number of loaded files."""
