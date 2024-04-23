@@ -9,48 +9,51 @@ def prepare_data(data, feature_size=128):
     This function ensures the input data matches the required feature size by padding or truncating.
     """
     if data.shape[1] < feature_size:
-        # Pad the data if less than required feature size
         padding = feature_size - data.shape[1]
         data = np.pad(data, ((0, 0), (0, padding)), 'constant')
     elif data.shape[1] > feature_size:
-        # Truncate the data if more than required feature size
         data = data[:, :feature_size]
     return data
 
-def generate(input_npy_path, output_midi_path, model, device=torch.device('cpu')):
+def convert_to_midi_compatible(data, window_size=10, activation_scale=0.05, pitch_scale=88, base_note=21):
     """
-    Generate MIDI file from NPY input using a trained model.
-    :param input_npy_path: Path to the input NPY file.
-    :param output_midi_path: Path to save the output MIDI file.
-    :param model: Trained model instance.
-    :param device: Computation device.
+    Convert the model output to MIDI-compatible values, using a sliding window to determine note activation.
     """
-    # Load data
+    midi_data = []
+    time = 0
+    for i in range(data.shape[0] - window_size):
+        window = data[i:i+window_size, 1]  # Take a slice of activation data
+        if np.mean(np.diff(window)) > activation_scale:  # Check if average change exceeds a scaled threshold
+            pitch = int(np.interp(data[i, 0], [data[:, 0].min(), data[:, 0].max()], [base_note, base_note + pitch_scale]))
+            duration = np.interp(data[i, 2], [data[:, 2].min(), data[:, 2].max()], [0.1, 1.5])
+            midi_data.append([pitch, time, duration])
+            time += duration
+
+    return np.array(midi_data)
+
+# Update the generate function to use this new conversion function
+def generate(input_npy_path, output_midi_path, model, device):
     data = np.load(input_npy_path)
     data = prepare_data(data)
     data_tensor = torch.tensor(data, dtype=torch.float32).unsqueeze(0).to(device)
 
-    # Set model to evaluation mode and generate music
     model.eval()
     with torch.no_grad():
         generated, _, _ = model(data_tensor)
 
-    # Check and print output data
     generated_data = generated.squeeze(0).cpu().numpy()
     print("Generated Data Shape:", generated_data.shape)
     print("Sample of Generated Data:", generated_data[:5])
 
-    # Assume the output needs to be adjusted or scaled
-    # Example: Convert to a proper MIDI format if necessary
-    # This part depends heavily on your specific model output and needs
-    if generated_data.shape[1] > 3:
-        generated_data = generated_data[:, :3]
+    midi_compatible_data = convert_to_midi_compatible(generated_data)
+    if midi_compatible_data.size > 0:
+        generated_npy_path = "temp_generated.npy"
+        np.save(generated_npy_path, midi_compatible_data)
+        npy_to_midi(generated_npy_path, output_midi_path)
+        print(f"Generated MIDI file saved to {output_midi_path}")
+    else:
+        print("No valid notes generated to convert into MIDI.")
 
-    generated_npy_path = "temp_generated.npy"
-    np.save(generated_npy_path, generated_data)
-
-    npy_to_midi(generated_npy_path, output_midi_path)
-    print(f"Generated MIDI file saved to {output_midi_path}")
 
 def main():
     # Setup
@@ -60,8 +63,8 @@ def main():
     model.load_state_dict(torch.load(model_path, map_location=device))
 
     # Paths for the input and output files
-    input_npy_path = 'output/midis-Alone.npy'
-    output_midi_path = 'output/output_path_for_your_midi.mid'
+    input_npy_path = 'output\midis-Legend_of_Zelda_Links_Awakening_Overworld.npy'
+    output_midi_path = 'generatedmusic.mid'
 
     # Generate the MIDI file from the input NPY
     generate(input_npy_path, output_midi_path, model, device)
