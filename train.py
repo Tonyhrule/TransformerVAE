@@ -2,13 +2,29 @@ import torch
 from torch import optim
 from torch.utils.data import DataLoader
 import os
-
+import logging
 from model import TransformerVAE
 from utils import PianoRollDataset
 
-def train(model, data_loader, optimizer, epochs=10, device=torch.device('cpu'), save_path=''):
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+
+def train(model, data_loader, optimizer, epochs=10, device=torch.device('cpu'), save_path='', validate=False):
+    """
+    Train the TransformerVAE model with the given data.
+    Optionally perform validation if validate set to True.
+
+    Args:
+        model (nn.Module): The TransformerVAE instance.
+        data_loader (DataLoader): DataLoader providing the dataset.
+        optimizer (Optimizer): Optimizer for training.
+        epochs (int): Number of epochs to train.
+        device (torch.device): Device to run the training on.
+        save_path (str): Path where the model will be saved.
+        validate (bool): Whether to perform validation using a validation set.
+    """
     model.train()
     model.to(device)
+
     for epoch in range(epochs):
         total_loss = 0
         for batch_idx, data in enumerate(data_loader):
@@ -19,49 +35,37 @@ def train(model, data_loader, optimizer, epochs=10, device=torch.device('cpu'), 
             loss.backward()
             optimizer.step()
             total_loss += loss.item()
+
             if batch_idx % 10 == 0:
-                print(f'Epoch {epoch+1}, Batch {batch_idx}: Loss = {loss.item()}')
+                logging.info(f'Epoch {epoch + 1}, Batch {batch_idx}: Loss = {loss.item()}')
+                save_model(model, save_path, batch_idx)
 
-                # Direct save test after a batch
-                try:
-                    torch.save(model.state_dict(), save_path)
-                    print(f'Test Model saved successfully after Batch {batch_idx}')
-                except Exception as e:
-                    print(f'Test Failed to save the model after Batch {batch_idx} due to: {e}')
-                
-        print(f'Epoch {epoch+1}: Average Loss = {total_loss / len(data_loader)}')
+        average_loss = total_loss / len(data_loader)
+        logging.info(f'Epoch {epoch + 1}: Average Loss = {average_loss}')
 
-    # Check and create directory for saving model
-    save_directory = os.path.dirname(save_path)
+        if validate:
+            validate_model(model, data_loader, device)
+
+def save_model(model, save_path, batch_idx):
     try:
-        if not os.path.exists(save_directory):
-            os.makedirs(save_directory)
-        print(f"Directory '{save_directory}' created or already exists.")
-    except Exception as e:
-        print(f"Failed to create or access the directory due to: {e}")
-
-    # Attempt to save the model state
-    try:
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
         torch.save(model.state_dict(), save_path)
-        print(f'Model successfully saved to {save_path}')
+        logging.info(f'Model saved successfully after Batch {batch_idx} to {save_path}')
     except Exception as e:
-        print(f'Failed to save the model at the end of training due to: {e}')
+        logging.error(f'Failed to save the model after Batch {batch_idx} due to: {e}')
 
-# Set the device to GPU if available, otherwise CPU
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+def validate_model(model, data_loader, device):
+    model.eval()
+    with torch.no_grad():
+        validation_loss = sum(model.loss_function(*model(data.to(device))) for data in data_loader) / len(data_loader)
+    logging.info(f'Validation Loss: {validation_loss}')
+    model.train()
 
-# Create the model instance
-model = TransformerVAE()
-
-# Define the optimizer
-optimizer = optim.Adam(model.parameters(), lr=1e-3)
-
-# Load the dataset and create a DataLoader instance
-dataset = PianoRollDataset(directory="./output", max_files=100)  # Adjust '100' as needed
-data_loader = DataLoader(dataset, batch_size=2, shuffle=True, collate_fn=PianoRollDataset.collate_fn)
-
-# Define the full path where the model will be saved
-save_path = r'C:\Users\tonyh\OneDrive\Desktop\MIDI-Music-Gen-AI\MIDI-Music-Gen-AI\ISEF-Music-AI-Ver.-MIDI-\TransformerVAE\model\transformer_vae_model.pth'
-
-# Run the training function
-train(model, data_loader, optimizer, device=device, save_path=save_path)
+if __name__ == "__main__":
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = TransformerVAE()
+    optimizer = optim.Adam(model.parameters(), lr=1e-3)
+    dataset = PianoRollDataset(directory="./output", max_files=100)
+    data_loader = DataLoader(dataset, batch_size=2, shuffle=True, collate_fn=PianoRollDataset.collate_fn)
+    save_path = r'C:\Users\tonyh\OneDrive\Desktop\TransformerVAE\model\transformer_vae_model.pth'
+    train(model, data_loader, optimizer, device=device, save_path=save_path, validate=True)
