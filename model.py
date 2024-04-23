@@ -43,9 +43,8 @@ class TransformerVAE(nn.Module):
         output = torch.sigmoid(self.to_output(decoded))  # Apply sigmoid to ensure output is between 0 and 1
 
         return output, mu, logvar
-    
+
     def loss_function(self, recon_x, x, mu, logvar):
         BCE = torch.nn.functional.binary_cross_entropy(recon_x, x, reduction='sum')
         KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
         return BCE + KLD
-    
